@@ -32,18 +32,7 @@ namespace crudSignalR.Core.Application
         {            
             Console.WriteLine("OnDisconnectedAsync");
             await base.OnDisconnectedAsync(e);
-        } 
-        public async Task  ValidateUserToken(object payload)
-        {
-            var mapa = JObject.Parse(payload.ToString());
-            string id = mapa["id"].Value<string>();
-            string token = mapa["token"].Value<string>();
-            bool result=await acountService.ValidateUserToken(id, token);
-            //if (!result)
-            //{
-            //    Context.Abort();
-            //}          
-        }
+        }        
 
         public async Task JoinUserToRoom(string id)
         {

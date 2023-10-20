@@ -9,7 +9,6 @@ namespace crudSignalR.Core.Application.Interface.Services
         Task<GenericApiResponse<RegisterResponse>> RegsterBasicUserAsync(RegisterRequest request, string origin);
         Task<GenericApiResponse<string>> ForgotPasswordAsync(ForgorPasswordRequest request, string origen);
         Task<GenericApiResponse<string>> ConfirmEmailAsync(ConfirmEmailRequestDTO confirmEmailRequestDTO);
-        Task<bool> ValidateUserToken(string userId, string token);
         Task<GenericApiResponse<string>> ResetPasswordAsyn(ResetPasswordRequest resetPasswordRequest);
         Task SingOutAsync();
         Task<GenericApiResponse<bool>> UpdateStatusOnline(bool isOnline, string id);

@@ -29,7 +29,7 @@ namespace crudSegnalR.Infrastructure.Identity
                     m=>m.MigrationsAssembly(typeof(IdentityContext).Assembly.FullName));
             });
             #endregion
-            var re = configuration["JwtSettings:Key"];
+            
             #region Identity
             services.AddIdentity<ApplicantionUser, IdentityRole>()
                 .AddEntityFrameworkStores<IdentityContext>()
@@ -42,53 +42,50 @@ namespace crudSegnalR.Infrastructure.Identity
                 {
                     options.DefaultAuthenticateScheme=JwtBearerDefaults.AuthenticationScheme;
                     options.DefaultChallengeScheme=JwtBearerDefaults.AuthenticationScheme;
-                }
-            ).AddJwtBearer
-            (options =>
-            {
-                options.RequireHttpsMetadata= false;
-                options.SaveToken= false;
-                options.TokenValidationParameters = new TokenValidationParameters
+                })
+                .AddJwtBearer(options =>
                 {
-                    ValidateIssuerSigningKey = true,
-                    ValidateIssuer=true,
-                    ValidateAudience=true,
-                    ValidateLifetime=true,
-                    ClockSkew=TimeSpan.Zero,
-                    ValidIssuer = configuration["JwtSettings:Issuer"],
-                    ValidAudience = configuration["JwtSettings:Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JwtSettings:Key"]))
-                };
-
-                options.Events = new JwtBearerEvents
-                {
-                    OnAuthenticationFailed = c =>
+                    options.RequireHttpsMetadata= false;
+                    options.SaveToken= false;
+                    options.TokenValidationParameters = new TokenValidationParameters
                     {
-                        c.NoResult();
-                        c.Response.StatusCode = 500;
-                        c.Response.ContentType = "text/plain";
-                        return c.Response.WriteAsync(c.Exception.ToString());
+                        ValidateIssuerSigningKey = true,
+                        ValidateIssuer=true,
+                        ValidateAudience=true,
+                        ValidateLifetime=true,
+                        ClockSkew=TimeSpan.Zero,
+                        ValidIssuer = configuration["JwtSettings:Issuer"],
+                        ValidAudience = configuration["JwtSettings:Audience"],
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JwtSettings:Key"]!))
+                    };
 
-                    },
-                    OnChallenge = c =>
+                    options.Events = new JwtBearerEvents
                     {
-                        c.HandleResponse();
-                        c.Response.StatusCode = 401;
-                        c.Response.ContentType = "application/json";
-                        var result = JsonConvert.SerializeObject(new JwtResponse { Error = "You are not authorized", HasError = true }); ;
-                        return c.Response.WriteAsync(result);
-                    },
-                    OnForbidden = c =>
-                    {
-                        c.Response.StatusCode = 403;
-                        c.Response.ContentType = "application/json";
-                        var result = JsonConvert.SerializeObject(new JwtResponse { Error = "You are not authorized to access this resource", HasError = true }); ;
-                        return c.Response.WriteAsync(result);
-                    }
-                };
-            }
+                        OnAuthenticationFailed = c =>
+                        {
+                            c.NoResult();
+                            c.Response.StatusCode = 500;
+                            c.Response.ContentType = "text/plain";
+                            return c.Response.WriteAsync(c.Exception.ToString());
 
-                
+                        },
+                        OnChallenge = c =>
+                        {
+                            c.HandleResponse();
+                            c.Response.StatusCode = 401;
+                            c.Response.ContentType = "application/json";
+                            var result = JsonConvert.SerializeObject(new JwtResponse { Error = "You are not authorized", HasError = true }); ;
+                            return c.Response.WriteAsync(result);
+                        },
+                        OnForbidden = c =>
+                        {
+                            c.Response.StatusCode = 403;
+                            c.Response.ContentType = "application/json";
+                            var result = JsonConvert.SerializeObject(new JwtResponse { Error = "You are not authorized to access this resource", HasError = true }); ;
+                            return c.Response.WriteAsync(result);
+                        }
+                    };
+                }                
             );
             #endregion
 

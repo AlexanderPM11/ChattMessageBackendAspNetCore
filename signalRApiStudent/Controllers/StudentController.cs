@@ -21,8 +21,7 @@ namespace signalRApiStudent.Controllers
             _hubContext = hubContext;
             _emailService = emailService;
         }
-
-       
+        
         #region Command
         [HttpPost("Create")]
         [Consumes(MediaTypeNames.Application.Json)]
@@ -64,7 +63,6 @@ namespace signalRApiStudent.Controllers
 
         }
         #endregion
-
 
         #region Queries
         [HttpGet]

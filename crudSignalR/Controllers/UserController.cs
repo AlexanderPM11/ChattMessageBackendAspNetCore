@@ -31,7 +31,6 @@ namespace crudSignalR.Controllers
             {
                 return View(vm);
             }
-            var origin = Request.Headers["origin"];
             ResetPasswordRequest request = mapper.Map<ResetPasswordRequest>(vm);
             var res = await acountService.ResetPasswordAsyn(request);
             return View(vm);

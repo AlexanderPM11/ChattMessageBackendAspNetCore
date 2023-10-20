@@ -9,30 +9,20 @@ using crudSignalR.Core.Application.Interface.Http;
 using crudSignalR.Core.Application.Interface.Services;
 using crudSignalR.Core.Domain.Settings;
 using Google.Apis.Auth;
-using MediatR;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
-using System.Net.Http;
 using System.Security.Claims;
 using System.Text;
-using System.Threading.Tasks;
-using System.Web;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Net.WebRequestMethods;
 
 namespace crudSegnalR.Infrastructure.Identity.Service
 {
     public class AccountService : IAccountService
     {
+        #region  Contructor and dependency
         private readonly UserManager<ApplicantionUser> _userManager;
         private readonly SignInManager<ApplicantionUser> _signInManager;
         private readonly IEmailService _emailService;
@@ -51,7 +41,9 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             _configuration = configuration;
             _facebookHttp = facebookHttp;
         }
+        #endregion
 
+        #region AuthenticateAsync
         public async Task<GenericApiResponse<AuthenticationResponse>> AuthenticateAsync(AuthenticationRequest request)
         {
             GenericApiResponse<AuthenticationResponse> response = new GenericApiResponse<AuthenticationResponse>();
@@ -81,43 +73,45 @@ namespace crudSegnalR.Infrastructure.Identity.Service
                 response.messages = new List<string>() { $"Account no confirmed for this email {request.Email}" };
                 return response;
             }
-            JwtSecurityToken jwtSecurityToken = await GenerateJWToken(user);
-            AuthenticationResponse authenticationResponse  = new AuthenticationResponse();
-            authenticationResponse.JWToken =new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken);
-           authenticationResponse.Id = user.Id;
-           authenticationResponse.Email = user.Email;
-           authenticationResponse.IsOnline = user.IsOnline;
-           authenticationResponse.UserName = user.UserName;
-           authenticationResponse.FirstName = user.FirstName;
-           authenticationResponse.LastName = user.LastName;
-            authenticationResponse.PictureBytes = user.BytesImageUsery;
-            authenticationResponse.IsVerified = user.EmailConfirmed;
-            var rolesList = await _userManager.GetRolesAsync(user).ConfigureAwait(false);
-            authenticationResponse.Roles = rolesList.ToList();
-
+            AuthenticationResponse? authenticationResponse = await JwTokenResponse(user.Email);
             response.payload = authenticationResponse;
-
             return response;
         }
-        public async Task<GenericApiResponse<AuthenticationResponse>> AuthenticateWithGoogleAsyn( ExternalAuthDto externalAuth)
+
+        #endregion
+
+        #region AuthenticateWithGoogleAsyn
+        public async Task<GenericApiResponse<AuthenticationResponse>> AuthenticateWithGoogleAsyn(ExternalAuthDto externalAuth)
         {
             GenericApiResponse<AuthenticationResponse> response = new GenericApiResponse<AuthenticationResponse>();
             try
             {
                 var settings = new GoogleJsonWebSignature.ValidationSettings()
                 {
-                    Audience = new List<string>() { _configuration.GetSection("GoogleAuthSettings:clientId").Value }
+                    Audience = new List<string>() { _configuration.GetSection("GoogleAuthSettings:clientId").Value ?? "" }
                 };
+
                 GoogleJsonWebSignature.Payload payload = await GoogleJsonWebSignature.ValidateAsync(externalAuth.IdToken, settings);
-                if(payload != null)
+                
+                if (payload != null)
                 {
-                    AuthenticationResponse authenticationResponse =await JwTokenResponse(payload.Email);
-                    if(authenticationResponse == null)
+                    var user = await _userManager.FindByEmailAsync(payload.Email);
+                    if (user == null)
                     {
+                        response.statuscode = 404;
                         response.success = false;
-                        response.messages = new List<string>() { "Usuario no registrado en nuestra base de datos" };
+                        response.messages = new List<string>() { $"No Account registered with this email {payload.Email}" };
+                        return response;
+
+                    }
+                    if (!user.EmailConfirmed)
+                    {
+                        response.statuscode = 401;
+                        response.success = false;
+                        response.messages = new List<string>() { $"Account no confirmed for this email {user.Email}" };
                         return response;
                     }
+                    AuthenticationResponse? authenticationResponse = await JwTokenResponse(payload.Email); 
                     response.payload = authenticationResponse;
                 }
                 return response;
@@ -126,38 +120,50 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             catch (Exception ex)
             {
                 response.success = false;
-                response.messages = new List<string>() { ex.Message};
+                response.messages = new List<string>() { ex.Message };
                 return response;
             }
         }
 
-        public async Task<GenericApiResponse<AuthenticationResponse>> AuthenticateWithFacebookAsyn( string credential)
+        #endregion
+
+        #region AuthenticateWithFacebookAsyn
+        public async Task<GenericApiResponse<AuthenticationResponse>> AuthenticateWithFacebookAsyn(string credential)
         {
             GenericApiResponse<AuthenticationResponse> response = new GenericApiResponse<AuthenticationResponse>();
             try
             {
                 string urlValidToken = "https://graph.facebook.com/debug_token?input_token=" +
                    credential + $"&access_token={_configuration.GetSection("FacebookAuth:AppId").Value}|{_configuration.GetSection("FacebookAuth:AppSecret").Value}";
-                
+
                 var validUser = await _facebookHttp.Get(urlValidToken);
 
                 if (validUser.success)
                 {
-                    var responsevalidUser = Newtonsoft.Json.JsonConvert.DeserializeObject<UserValidFacebookDto>(validUser.payload);
-                    if (responsevalidUser.Data.Is_Valid)
+                    var responsevalidUser = Newtonsoft.Json.JsonConvert.DeserializeObject<UserValidFacebookDto>(validUser.payload!);
+                    if (responsevalidUser!.Data.Is_Valid)
                     {
                         string urlGetUserInformation = "https://graph.facebook.com/me?fields=first_name,last_name,email,picture.width(200),id&access_token=" + credential;
                         var userData = await _facebookHttp.Get(urlGetUserInformation);
-                        var responseObj = Newtonsoft.Json.JsonConvert.DeserializeObject<UserDataFacebookDTO>(userData.payload);
-                        if (responseObj.Email != null)
+                        var responseObj = Newtonsoft.Json.JsonConvert.DeserializeObject<UserDataFacebookDTO>(userData.payload!);
+                        if (responseObj?.Email != null)
                         {
-                            AuthenticationResponse authenticationResponse = await JwTokenResponse(responseObj.Email);
-                            if (authenticationResponse == null)
+                            var user = await _userManager.FindByEmailAsync(responseObj.Email);
+                            if (user == null)
                             {
+                                response.statuscode = 404;
                                 response.success = false;
-                                response.messages = new List<string>() { "Usuario no registrado en nuestra base de datos" };
+                                response.messages = new List<string>() { $"No Account registered with this email {responseObj.Email}" };
                                 return response;
                             }
+                            if (!user.EmailConfirmed)
+                            {
+                                response.statuscode = 401;
+                                response.success = false;
+                                response.messages = new List<string>() { $"Account no confirmed for this email {user.Email}" };
+                                return response;
+                            }
+                            AuthenticationResponse? authenticationResponse = await JwTokenResponse(responseObj.Email);
                             response.payload = authenticationResponse;
                         }
                         return response;
@@ -169,7 +175,7 @@ namespace crudSegnalR.Infrastructure.Identity.Service
                         return response;
                     }
                 }
-                else 
+                else
                 {
                     response.success = false;
                     response.messages = new List<string>() { "Ocurrió un error al momento de hacer el login" };
@@ -180,41 +186,26 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             catch (Exception ex)
             {
                 response.success = false;
-                response.messages = new List<string>() { ex.Message};
+                response.messages = new List<string>() { ex.Message };
                 return response;
             }
         }
 
+        #endregion
+
+        #region SingOutAsync
         public async Task SingOutAsync()
         {
             await _signInManager.SignOutAsync();
-        } 
-        public async Task<bool> ValidateUserToken(string userId,string token)
-        {
-            var tokenHandler = new JwtSecurityTokenHandler();
-            try
-            {
-              var claimsPrincipal=  tokenHandler.ValidateToken(token, new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidIssuer = _jwtSettings.Issuer,
-                    ValidAudience = _jwtSettings.Audience,
-                  IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key))
-              }, out SecurityToken validatedToken);
-               
-            }
-            catch
-            {
-                return false;
-            }
-            return true;
         }
-        public async Task<GenericApiResponse<bool>> UpdateStatusOnline(bool isOnline,string id)
+
+        #endregion        
+
+        #region UpdateStatusOnline
+        public async Task<GenericApiResponse<bool>> UpdateStatusOnline(bool isOnline, string id)
         {
             GenericApiResponse<bool> response = new();
-            var user=  await _userManager.FindByIdAsync(id);
+            var user = await _userManager.FindByIdAsync(id);
             if (user == null)
             {
                 response.statuscode = 500;
@@ -222,17 +213,9 @@ namespace crudSegnalR.Infrastructure.Identity.Service
                 response.messages = new List<string>() { $"An error ocurred while change status Online user" };
                 return response;
             }
-            if (isOnline) 
-            {              
-                user.IsOnline = true;
-            }
-            else 
-            {
-                user.IsOnline = false;
-            }
-          var result= await _userManager.UpdateAsync(user);
+            user.IsOnline = !user.IsOnline;
+            var result = await _userManager.UpdateAsync(user);
             response.payload = result.Succeeded;
-
             if (!result.Succeeded)
             {
                 response.statuscode = 500;
@@ -242,41 +225,46 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             }
             return response;
         }
+
+        #endregion
+
+        #region GetAllUserExectMe
         public async Task<GenericApiResponse<List<AuthenticationResponse>>> GetAllUserExectMe(string id)
         {
             GenericApiResponse<List<AuthenticationResponse>> listAuthenticationResponse = new();
-            listAuthenticationResponse.payload =new();
-            var users =  _userManager.Users.ToList();
+            listAuthenticationResponse.payload = new();
+            var users = _userManager.Users.Where(user=>user.Id != id).ToList();
             foreach (var user in users)
             {
-                if(user.Id!= id)
+                AuthenticationResponse authenticationResponse = new()
                 {
-                AuthenticationResponse authenticationResponse = new();
-                authenticationResponse.Id = user.Id;
-                authenticationResponse.Email = user.Email;
-                authenticationResponse.IsOnline = user.IsOnline;
-                authenticationResponse.UserName = user.UserName;
-                authenticationResponse.FirstName = user.FirstName;
-                authenticationResponse.LastName = user.LastName;
-                authenticationResponse.IsVerified = user.EmailConfirmed;
-                authenticationResponse.PictureBytes = user.BytesImageUsery;
+                    Id = user.Id,
+                    Email = user.Email,
+                    IsOnline = user.IsOnline,
+                    UserName = user.UserName,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    IsVerified = user.EmailConfirmed,
+                    PictureBytes = user.BytesImageUsery
+                };
+
                 var rolesList = await _userManager.GetRolesAsync(user).ConfigureAwait(false);
                 authenticationResponse.Roles = rolesList.ToList();
                 listAuthenticationResponse.payload.Add(authenticationResponse);
-                }
-                
             }
-           
-
             return listAuthenticationResponse;
         }
+
+
+        #endregion
+
+        #region RegsterBasicUserAsync
         public async Task<GenericApiResponse<RegisterResponse>> RegsterBasicUserAsync(RegisterRequest request, string origin)
         {
             GenericApiResponse<RegisterResponse> response = new();
             var user = await _userManager.FindByNameAsync(request.UserName);
             if (user != null)
             {
-                //response.payload = $"Username {request.UserName} is already taken";
                 response.statuscode = 409;
                 response.success = false;
                 response.messages = new List<string>() { $"Username {request.UserName} is already taken." };
@@ -285,7 +273,6 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             var userWithSameEmail = await _userManager.FindByEmailAsync(request.Email);
             if (userWithSameEmail != null)
             {
-                //response.payload = $"Username {request.UserName} is already taken";
                 response.statuscode = 409;
                 response.success = false;
                 response.messages = new List<string>() { $"Email {request.Email} is already taken." };
@@ -298,7 +285,6 @@ namespace crudSegnalR.Infrastructure.Identity.Service
                 LastName = request.LastName,
                 PhoneNumber = request.Phone,
                 UserName = request.UserName,
-
             };
 
             var result = await _userManager.CreateAsync(userToCreate, request.Password);
@@ -309,7 +295,7 @@ namespace crudSegnalR.Infrastructure.Identity.Service
                     Email = request.Email,
                     FirstName = request.FirstName,
                     LastName = request.LastName,
-                    Phone= request.Phone,
+                    Phone = request.Phone,
                     UserName = request.UserName,
 
                 };
@@ -318,6 +304,7 @@ namespace crudSegnalR.Infrastructure.Identity.Service
                 response.messages = new List<string>() { GeneralMessageResponse.Success };
                 await _userManager.AddToRoleAsync(userToCreate, UserRoles.Basic.ToString());
                 string verificantionUri = await SendVerificantionEmailUrl(userToCreate, origin);
+
                 string htmlBody = $@"
                         <!DOCTYPE html>
                         <html>
@@ -362,9 +349,9 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             }
             else
             {
-                
                 List<string> messages = new List<string>();
-                foreach (var error in result.Errors) {
+                foreach (var error in result.Errors)
+                {
                     messages.Add(error.Description);
                 }
                 response.statuscode = 500;
@@ -372,9 +359,11 @@ namespace crudSegnalR.Infrastructure.Identity.Service
                 response.messages = messages;
                 return response;
             }
-
         }
 
+        #endregion
+
+        #region ForgotPasswordAsync
         public async Task<GenericApiResponse<string>> ForgotPasswordAsync(ForgorPasswordRequest request, string origen)
         {
             GenericApiResponse<string> response = new();
@@ -395,6 +384,9 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             return response;
         }
 
+        #endregion
+
+        #region ConfirmEmailAsync
         public async Task<GenericApiResponse<string>> ConfirmEmailAsync(ConfirmEmailRequestDTO confirmEmailRequestDTO)
         {
             GenericApiResponse<string> response = new();
@@ -402,7 +394,7 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             if (user == null)
             {
                 response.messages = new List<string>() { "No account register with this user" };
-                response.success =false;
+                response.success = false;
                 response.payload = "No account register with this user";
                 return response;
             }
@@ -428,13 +420,16 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             return response;
         }
 
+        #endregion
+
+        #region ResetPasswordAsyn
         public async Task<GenericApiResponse<string>> ResetPasswordAsyn(ResetPasswordRequest resetPasswordRequest)
         {
             GenericApiResponse<string> response = new();
             var user = await _userManager.FindByEmailAsync(resetPasswordRequest.Email);
             if (user == null)
             {
-                response.success=false;
+                response.success = false;
                 response.messages.Add("No account register with this user");
                 return response;
             }
@@ -445,7 +440,7 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             {
                 response.success = true;
                 response.messages.Add("Password reset successfully");
-                response.payload="Password reset successfully";
+                response.payload = "Password reset successfully";
                 return response;
             }
             response.success = false;
@@ -456,10 +451,13 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             return response;
         }
 
+        #endregion 
+
         #region private method
-        private async Task<AuthenticationResponse> JwTokenResponse(string email)
+        private async Task<AuthenticationResponse?> JwTokenResponse(string email)
         {
             var user = await _userManager.FindByEmailAsync(email);
+            
             if(user!= null)
             {
                 JwtSecurityToken jwtSecurityToken = await GenerateJWToken(user);
@@ -490,8 +488,7 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             string verificantionUrl = QueryHelpers.AddQueryString(Uri.ToString(), "userId", applicantion.Id);
             verificantionUrl = QueryHelpers.AddQueryString(verificantionUrl, "token", code);
             return verificantionUrl;
-        }
-              
+        }             
 
         private async Task<string> SendForgotPasswordlUrl(ApplicantionUser applicantion, string origin)
         {
@@ -504,8 +501,7 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             Uri Uri = new Uri("https://appchattt.netlify.app/changePassWord.html/");
             string verificantionUrl = QueryHelpers.AddQueryString(Uri.ToString(), "token", code);
             return verificantionUrl;
-        }
-        
+        }        
         //jwt 
         private async Task<JwtSecurityToken> GenerateJWToken(ApplicantionUser applicantion)
         {
@@ -539,11 +535,9 @@ namespace crudSegnalR.Infrastructure.Identity.Service
             return jwtSecurityToken;
         }
 
-
         #endregion
 
-
-        #region Update dates users
+        #region UpdateImageUser
 
         public async Task<GenericApiResponse<byte[]>> UpdateImageUser(UpdateImageUserDTO updateImageUser)
         {
@@ -587,8 +581,5 @@ namespace crudSegnalR.Infrastructure.Identity.Service
         }
 
         #endregion
-
-
-
     }
 }

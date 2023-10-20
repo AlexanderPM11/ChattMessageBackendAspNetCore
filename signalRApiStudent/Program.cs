@@ -20,7 +20,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 builder.Services.AddPersistenceInfrastructure(builder.Configuration);
 builder.Services.AddApplicationLayer();
 builder.Services.AddLayerIdenityApi(builder.Configuration);
@@ -31,6 +30,7 @@ builder.Services.AddApiExtensions();
 builder.Services.AddSwaggerExtensions();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpClient();
+
 builder.Services.AddAuthentication()
     .AddFacebook(facebookOptions =>
     {
