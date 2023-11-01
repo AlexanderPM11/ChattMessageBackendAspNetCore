@@ -12,8 +12,8 @@ using crudSegnalR.Infrastructure.Identity.Context;
 namespace crudSegnalR.Infrastructure.Identity.Migrations
 {
     [DbContext(typeof(IdentityContext))]
-    [Migration("20230722055140_Add_field_BytesImageUsery in ApplicantionUser")]
-    partial class Add_field_BytesImageUseryinApplicantionUser
+    [Migration("20231101044445_initial")]
+    partial class initial
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {

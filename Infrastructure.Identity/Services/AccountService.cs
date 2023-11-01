@@ -540,8 +540,7 @@ namespace crudSegnalR.Infrastructure.Identity.Service
         #region UpdateImageUser
 
         public async Task<GenericApiResponse<byte[]>> UpdateImageUser(UpdateImageUserDTO updateImageUser)
-        {
-            
+        {            
             GenericApiResponse<byte[]> response = new();
 
             var user = await _userManager.FindByIdAsync(updateImageUser.userId);
@@ -550,27 +549,25 @@ namespace crudSegnalR.Infrastructure.Identity.Service
                 var imageBytes = await EncondeImageData.EncondeImage(updateImageUser.file);
                 if(imageBytes != null)
                 {
-                user.BytesImageUsery = imageBytes;
-                               IdentityResult  identityResult=  await _userManager.UpdateAsync(user);
-                                if (identityResult.Succeeded)
-                                {
-                                    response.messages = new List<string>() { GeneralMessageResponse.Success };
-                                    response.success = identityResult.Succeeded;
+                    user.BytesImageUsery = imageBytes;
+                    IdentityResult  identityResult=  await _userManager.UpdateAsync(user);
+                    if (identityResult.Succeeded)
+                    {
+                        response.messages = new List<string>() { GeneralMessageResponse.Success };
+                        response.success = identityResult.Succeeded;
                         response.payload = imageBytes;
-
-                                }
-                                else
-                                {
-                                    response.messages = new List<string>() { GeneralMessageResponse.Error };
-                                    response.success = identityResult.Succeeded;
-                                }
+                    }
+                    else
+                    {
+                        response.messages = new List<string>() { GeneralMessageResponse.Error };
+                        response.success = identityResult.Succeeded;
+                    }
                 }
                 else
                 {
                     response.messages = new List<string>() { GeneralMessageResponse.Error };
                     response.success = false;
                 }
-
             }
             else
             {
