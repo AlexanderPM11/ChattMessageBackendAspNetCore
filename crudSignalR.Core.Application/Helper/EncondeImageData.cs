@@ -15,8 +15,8 @@ namespace crudSignalR.Core.Application.Helper
             var memoryStream = new MemoryStream();
             await file.CopyToAsync(memoryStream);
             var resultBytes = memoryStream.ToArray();
-            return resultBytes;
-            
+
+            return resultBytes;            
         }
     }
 }

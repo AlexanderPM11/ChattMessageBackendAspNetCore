@@ -67,22 +67,22 @@ app.MapControllers();
 
 app.MapHub<SiganalServer>("/studentHub");
 
- #region  creating seeds our application
+#region  creating seeds our application
 using
 (
-  var scope= app.Services.CreateScope()
+  var scope = app.Services.CreateScope()
 )
 {
-    var services= scope.ServiceProvider;
+	var services = scope.ServiceProvider;
 	try
 	{
 		var userManager = services.GetRequiredService<UserManager<ApplicantionUser>>();
 		var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 		await DefaultRoles.SeedAsync(roleManager);
-		await DefaultAdminUser.SeedAsync(userManager,roleManager);
+		await DefaultAdminUser.SeedAsync(userManager, roleManager);
 		await DefaultBasicUser.SeedAsync(userManager, roleManager);
 		await DefaultSuperAdminUser.SeedAsync(userManager, roleManager);
-    }
+	}
 	catch (Exception)
 	{
 		throw;
